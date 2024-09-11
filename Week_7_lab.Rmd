@@ -1,0 +1,199 @@
+---
+title: "The Maps of New Zealand"
+author: "Alfiya Shafy"
+date: "2024-09-10"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# The Basic Map of New Zealand
+
+Here we create a basic map of New Zealand which can be zoomed in and out to display the small details of the area.
+
+```{r}
+library(leaflet)
+library(dplyr)
+nz_map <- leaflet() %>%
+  addTiles() %>%
+  setView(lng = 174.885971, lat = -40.900557, zoom = 5)
+
+nz_map
+```
+
+## Adding Markers to the Map
+
+In the above map we created we are gonna add markers to mark the major cities in New Zealand such as Auckland, Wellington and Christchruch.
+
+```{r}
+#Create New Zealand dataset.
+nz_pop <- data.frame(
+  city = c("Auckland", "Wellington", "Christchurch"),
+  lat = c(-36.85102, -41.29352, -43.53305),
+  lng = c(174.75796, 174.77760, 172.63093),
+  population = c(1693000, 424000, 408000)
+)
+
+#Create New Zealand map with makers.
+nz_map_pop <- leaflet(nz_pop) %>%
+  addTiles() %>%
+  setView(lng = 174.7633, lat = -40.900557, zoom = 5) %>%
+  addMarkers(~lng, ~lat, popup = ~paste(city, "<br>Population:", population))
+
+nz_map_pop
+```
+
+## Creating the Leaflet Map and Add a Provider Tile
+
+```{r}
+# Create the leaflet map
+nz_map <- leaflet(nz_pop) %>%
+  addTiles() %>%  # Basic tiles to render the map
+  setView(lng = 174.7633, lat = -40.900557, zoom = 5) %>%  # Center on New Zealand
+  addMarkers(~lng, ~lat, popup = ~paste(city, "<br>Population:", population)) %>%  # Add city markers
+  addProviderTiles(providers$CartoDB.Positron)  # Use a clear and readable provider tile
+
+# Display the map
+nz_map
+```
+
+# Creating Heatmap
+
+Now we create heatmap depicting the population density of major cities in New Zealand.
+
+```{r}
+library(leaflet)
+library(leaflet.extras)
+
+nz_map_heat <- leaflet(nz_pop) %>%
+  addTiles() %>%
+  setView(lng = 174.7633, lat = -40.900557, zoom = 5) %>%
+  addHeatmap(lng = ~lng, lat = ~lat, intensity = ~population, blur = 20, max = 1, radius = 15)
+
+nz_map_heat
+
+```
+
+# Reading GeoJSON File.
+```{r}
+library(sf)
+nz_geo <- st_read("C:/Users/dell/Downloads/nz_ta.geojson")
+```
+
+## Creating Black and White Plot
+
+Now we create a black and white map of the New Zealand territories.
+
+```{r}
+library(ggplot2)
+ggplot(nz_geo) +
+  geom_sf() +
+  theme_void()
+
+```
+
+## Loading Population dataset
+
+We now load the population csv file dataset.
+
+```{r}
+#Loading the data.
+population_data <- read.csv("C:/Users/dell/Downloads/nz_territory_2016_population.csv")
+
+#Removing the unnecessary data points.
+names(population_data) <- tolower(names(population_data))
+str(population_data)
+
+
+```
+
+## Merging the Geospatial and Population Data.
+
+```{r}
+library(sf)
+library(dplyr)
+
+# Perform a left join using dplyr
+merged_data <- nz_geo %>%
+  left_join(population_data, by = c("TA2016_NAM" = "nz_territory"))
+
+# Check the result
+print(merged_data)
+
+#Renaming Colunm names 
+library(dplyr)
+
+# Rename columns in merged_data
+merged_data <- merged_data %>%
+  rename(
+    NZ_territory = TA2016_NAM,
+    Population = x2016_population
+  )
+```
+
+# Creating the Basic Choropleth Map
+
+Here we create the basic Choropleth Map.
+
+```{r}
+ggplot(merged_data) +
+  geom_sf(aes(fill = Population)) +
+  theme_void()
+```
+
+# Advanced Choropleth Map
+
+Here we create more sophisticated Choropleth Map.
+
+```{r}
+nz_plot <- ggplot(merged_data) +
+  geom_sf(aes(fill = log(Population))) +
+  scale_fill_viridis_c() +
+  theme_void() +
+  labs(
+    title = "New Zealand Population by Territory",
+    fill = "Population (Log Scale)"
+  )
+
+ggsave("nz_plot.png")
+
+```
+
+# Extra for Experts
+
+We are going to create a more interactive Choropleth Map using RColorBrewer and ploty packages.
+
+```{r}
+#Loading packages
+library(plotly)
+library(RColorBrewer)
+library(sf)
+library(dplyr)
+
+#Defining Color palette
+color_palette <- brewer.pal(9, "Blues")
+
+merged_data$Population <- as.numeric(merged_data$Population)
+
+# Create the interactive map
+plot_ly(data = merged_data, 
+        type = 'scattermapbox',
+        mode = 'markers',
+        color = ~Population,
+        colors = color_palette,
+        text = ~paste("Territory:", merged_data$NZ_territory, "<br>Population:", Population),
+        hoverinfo = 'text',
+        marker = list(size = 10, opacity = 1)) %>%
+  layout(mapbox = list(style = 'open-street-map',
+                       center = list(lon = 174.8860, lat = -40.9006),
+                       zoom =3
+                       ),
+         title = 'Interactive Choropleth Map of New Zealand Population',
+         coloraxis = list(colorbar = list(title = 'Population'))) %>%
+  config(displayModeBar = TRUE)
+```
+
